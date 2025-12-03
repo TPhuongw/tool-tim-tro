@@ -38,11 +38,13 @@ def connect_google_sheet():
     return client
 
 # Cấu hình AI
+# Cấu hình AI
+# Chỉ lấy Key từ Secrets (Két sắt), không điền trực tiếp ở đây
 if "gemini_api_key" in st.secrets:
     api_key = st.secrets["gemini_api_key"]
 else:
-    api_key = "AIzaSyDhDa6TXgqVBLuvhWn6qD7gPfonn4Yru_U"
-
+    # Nếu dòng này đang chứa key thật, hãy xóa nó đi và để trống hoặc để chuỗi giả
+    api_key = "KEY_DU_PHONG_DA_XOA"
 genai.configure(api_key=api_key)
 # Dùng bản 1.5 Flash cho ổn định trên Cloud
 model = genai.GenerativeModel('gemini-2.5-flash')
@@ -131,4 +133,5 @@ if submitted:
                 st.toast("Đã lưu!", icon="🎉")
             else:
                 st.error("Không đọc được tin. Hãy xem lỗi chi tiết bên trên!")
+
 
