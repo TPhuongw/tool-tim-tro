@@ -12,6 +12,7 @@ SHEET_NAME = "danhsachtro"
 @st.cache_resource
 def get_credentials():
     # 1. Ưu tiên lấy từ Secrets (khi chạy trên Cloud)
+    # Kiểm tra xem secrets có mục gcp_service_account không
     if "gcp_service_account" in st.secrets:
         return st.secrets["gcp_service_account"]
     
@@ -28,23 +29,27 @@ def connect_google_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds_source = get_credentials()
     
+    # Nếu không tìm thấy cả 2 nguồn (Secrets và File)
     if not creds_source:
-        st.error("❌ Lỗi: Không tìm thấy chìa khóa đăng nhập (Chưa cài đặt Secrets trên Cloud hoặc thiếu file json).")
+        st.error("❌ Lỗi: Không tìm thấy chìa khóa đăng nhập. Bạn hãy kiểm tra lại mục Secrets trên Streamlit Cloud.")
         st.stop()
         
+    # Xử lý kết nối
     if isinstance(creds_source, dict):
+        # Nếu là dictionary (từ Secrets)
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_source, scope)
     else:
+        # Nếu là string đường dẫn (từ File json)
         creds = ServiceAccountCredentials.from_json_keyfile_name(creds_source, scope)
         
     client = gspread.authorize(creds)
     return client
 
 # Cấu hình AI
+# Lấy API Key từ Secrets, nếu không có thì dùng key dự phòng (chỉ để test)
 if "gemini_api_key" in st.secrets:
     api_key = st.secrets["gemini_api_key"]
 else:
-    # Key dự phòng để chạy local (nếu bạn chưa xóa dòng này)
     api_key = "AIzaSyDhDa6TXgqVBLuvhWn6qD7gPfonn4Yru_U"
 
 genai.configure(api_key=api_key)
@@ -115,7 +120,6 @@ if submitted:
             data = parse_rental_ad(text_input)
             if data:
                 st.success("Xong!")
-                # st.dataframe([data]) # Tạm tắt bảng xem trước cho đỡ rối trên điện thoại
                 client = connect_google_sheet()
                 save_to_sheet(data, link_input, client)
                 st.toast("Đã lưu!", icon="🎉")
