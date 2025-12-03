@@ -45,7 +45,7 @@ else:
 
 genai.configure(api_key=api_key)
 # Dùng bản 1.5 Flash cho ổn định trên Cloud
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 # --- HÀM XỬ LÝ AI (ĐÃ SỬA LỖI ĐỌC TIN) ---
 def parse_rental_ad(ad_text):
@@ -131,3 +131,4 @@ if submitted:
                 st.toast("Đã lưu!", icon="🎉")
             else:
                 st.error("Không đọc được tin. Hãy xem lỗi chi tiết bên trên!")
+
