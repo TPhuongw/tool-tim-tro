@@ -8,20 +8,16 @@ import os
 # --- CẤU HÌNH ---
 SHEET_NAME = "danhsachtro" 
 
-# --- XỬ LÝ KẾT NỐI (Code thông minh: Tự nhận biết chạy trên Cloud hay Máy tính) ---
+# --- XỬ LÝ KẾT NỐI ---
 @st.cache_resource
 def get_credentials():
-    # 1. Ưu tiên lấy từ Secrets (khi chạy trên Cloud)
-    # Kiểm tra xem secrets có mục gcp_service_account không
     if "gcp_service_account" in st.secrets:
         return st.secrets["gcp_service_account"]
     
-    # 2. Nếu không có Secrets, tìm file json (khi chạy trên máy tính)
     current_dir = os.path.dirname(os.path.abspath(__file__))
     json_path = os.path.join(current_dir, "credentials.json")
     if os.path.exists(json_path):
         return json_path
-        
     return None
 
 @st.cache_resource
@@ -29,33 +25,29 @@ def connect_google_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds_source = get_credentials()
     
-    # Nếu không tìm thấy cả 2 nguồn (Secrets và File)
     if not creds_source:
-        st.error("❌ Lỗi: Không tìm thấy chìa khóa đăng nhập. Bạn hãy kiểm tra lại mục Secrets trên Streamlit Cloud.")
+        st.error("❌ Lỗi: Không tìm thấy Key (Secrets hoặc file json).")
         st.stop()
         
-    # Xử lý kết nối
     if isinstance(creds_source, dict):
-        # Nếu là dictionary (từ Secrets)
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_source, scope)
     else:
-        # Nếu là string đường dẫn (từ File json)
         creds = ServiceAccountCredentials.from_json_keyfile_name(creds_source, scope)
         
     client = gspread.authorize(creds)
     return client
 
 # Cấu hình AI
-# Lấy API Key từ Secrets, nếu không có thì dùng key dự phòng (chỉ để test)
 if "gemini_api_key" in st.secrets:
     api_key = st.secrets["gemini_api_key"]
 else:
     api_key = "AIzaSyDhDa6TXgqVBLuvhWn6qD7gPfonn4Yru_U"
 
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-2.5-flash')
+# Dùng bản 1.5 Flash cho ổn định trên Cloud
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-# --- HÀM XỬ LÝ AI ---
+# --- HÀM XỬ LÝ AI (ĐÃ SỬA LỖI ĐỌC TIN) ---
 def parse_rental_ad(ad_text):
     prompt = f"""
     Trích xuất thông tin trọ thành JSON phẳng.
@@ -71,10 +63,23 @@ def parse_rental_ad(ad_text):
     try:
         response = model.generate_content(prompt)
         text = response.text.strip()
-        if text.startswith("```json"): text = text[7:]
-        if text.endswith("```"): text = text[:-3]
+        
+        # --- BƯỚC QUAN TRỌNG: LÀM SẠCH JSON ---
+        # AI thường trả về ```json ở đầu và ``` ở cuối, phải cắt bỏ đi mới đọc được
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"): # Phòng trường hợp nó chỉ có ```
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip() # Cắt khoảng trắng thừa lần nữa
+        # ---------------------------------------
+
         return json.loads(text)
     except Exception as e:
+        # In lỗi chi tiết ra màn hình để debug
+        st.error(f"⚠️ Lỗi chi tiết từ Google: {e}")
+        st.write("Dữ liệu AI trả về (bị lỗi):", response.text if 'response' in locals() else "Không có phản hồi")
         return None
 
 # --- HÀM GHI SHEET ---
@@ -120,8 +125,9 @@ if submitted:
             data = parse_rental_ad(text_input)
             if data:
                 st.success("Xong!")
+                # st.dataframe([data]) 
                 client = connect_google_sheet()
                 save_to_sheet(data, link_input, client)
                 st.toast("Đã lưu!", icon="🎉")
             else:
-                st.error("Lỗi đọc tin!")
+                st.error("Không đọc được tin. Hãy xem lỗi chi tiết bên trên!")
